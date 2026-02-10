@@ -1,5 +1,58 @@
 <?php
 
+// Temporary startup debugging for index.php failures.
+// This makes PHP startup/runtime issues visible in the browser instead of a blank HTTP 500 page.
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+
+$renderStartupDebug = static function (string $title, string $message, ?string $details = null): void {
+    http_response_code(500);
+    header('Content-Type: text/html; charset=utf-8');
+
+    $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+    $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+    $safeDetails = $details !== null ? nl2br(htmlspecialchars($details, ENT_QUOTES, 'UTF-8')) : '';
+
+    echo "<!doctype html><html lang='en'><head><meta charset='utf-8'><title>ChurchCRM Debug</title>";
+    echo "<style>body{font-family:Arial,sans-serif;background:#f7f7f9;padding:24px;}";
+    echo ".box{background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px;max-width:1100px;}";
+    echo "h1{margin-top:0;color:#b00020;}pre{white-space:pre-wrap;word-wrap:break-word;background:#f3f3f3;padding:12px;border-radius:6px;}</style></head><body>";
+    echo "<div class='box'><h1>{$safeTitle}</h1><p>{$safeMessage}</p>";
+
+    if ($safeDetails !== '') {
+        echo "<h3>Details</h3><pre>{$safeDetails}</pre>";
+    }
+
+    echo "<h3>Environment</h3><pre>";
+    echo 'PHP Version: ' . phpversion() . "\n";
+    echo 'Script: ' . (__FILE__) . "\n";
+    echo 'Request URI: ' . ($_SERVER['REQUEST_URI'] ?? 'N/A') . "\n";
+    echo 'Config Exists: ' . (file_exists(__DIR__ . '/Include/Config.php') ? 'yes' : 'no') . "\n";
+    echo "</pre></div></body></html>";
+    exit(1);
+};
+
+set_error_handler(static function (int $severity, string $message, string $file, int $line) use ($renderStartupDebug): bool {
+    if (!(error_reporting() & $severity)) {
+        return false;
+    }
+
+    $renderStartupDebug(
+        'PHP Error while loading ChurchCRM',
+        $message,
+        "Severity: {$severity}\nFile: {$file}\nLine: {$line}"
+    );
+});
+
+set_exception_handler(static function (Throwable $exception) use ($renderStartupDebug): void {
+    $renderStartupDebug(
+        'Unhandled Exception while loading ChurchCRM',
+        $exception->getMessage(),
+        "Type: " . get_class($exception) . "\nFile: " . $exception->getFile() . "\nLine: " . $exception->getLine() . "\n\nStack Trace:\n" . $exception->getTraceAsString()
+    );
+});
+
 // Load composer autoloader first so we can use VersionUtils utility
 require_once __DIR__ . '/vendor/autoload.php';
 
